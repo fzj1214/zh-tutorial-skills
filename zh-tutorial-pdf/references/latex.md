@@ -115,9 +115,15 @@ complementarity product   = 0.000e+00
 \end{minted}
 ```
 
-长文件不要复制进正文，用 `\inputminted[firstline=40,lastline=65]{python}{examples/demo.py}`；
+长文件不要复制进正文，用
+`\inputminted[autogobble=false,firstline=40,lastline=65]{python}{examples/demo.py}`；
 这样正文与实际运行文件共用一份源码。中文注释可正常渲染，但图书式教程仍应优先让变量名和
 结构本身说话，注释保持短。程序输出关闭行号；需要逐行讲解的源代码才保留行号。
+
+这里的 `autogobble=false` 不能省：实测 minted 2.6 在全局 `autogobble=true` 时，
+`\inputminted` 再叠加 `firstline/lastline` 会把所选区间处理成空块，轻则代码静默消失，
+重则报 `FancyVerb Error: Empty verbatim environment`。行内 `minted` 环境仍可使用全局
+autogobble；只有按行截取外部文件时显式关闭。
 
 如果来源不可信、构建环境禁止 shell escape，或者无法提供 Pygments，退回 `listings`。
 这是兼容方案，不要同时加载两个宏包并混用环境。
