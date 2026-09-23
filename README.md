@@ -108,6 +108,10 @@ C 不懂   → 展开：把它的依赖加进下一轮
 brew install tectonic
 ```
 
+源码默认用 `minted + Pygments` 排版，提供真正的 Python/XML 语法高亮、行号和长行换行；
+程序输出用无行号纯文本并保留对齐空格。技能内给出了已经实测通过的 Tectonic
+`shell-escape` 与文档专用虚拟环境配置。
+
 也支持 XeLaTeX + ctex（机器已有 TeX Live 时）和 [Typst](https://typst.app/)（想要极简依赖时）。
 
 ## 许可

@@ -35,6 +35,22 @@ tectonic -X watch                                   # 需先 tectonic -X new 建
 
 tectonic 会自动决定编译轮数（解决交叉引用），不必像 xelatex 那样手动跑两遍。
 
+使用本技能默认的 minted 代码高亮时，还需要 Pygments。装进项目自己的小环境，避免污染
+系统 Python：
+
+```bash
+python3 -m venv .venv-doc
+.venv-doc/bin/python -m pip install pygments
+PATH="$PWD/.venv-doc/bin:$PATH" \
+  tectonic -X compile main.tex --outdir . --keep-logs \
+  -Z shell-escape-cwd="$PWD"
+```
+
+实测组合：Tectonic 0.17.0、minted 2.6、Pygments 2.21.0。`-Z shell-escape-cwd`
+既启用 minted 所需的外部命令，又把命令工作目录固定在项目根目录；省掉它时常见症状是
+`Package minted Error: You must invoke LaTeX with the -shell-escape flag`。`--untrusted`
+会禁用 shell escape，不能与 minted 同用。只对自己下载并检查过的教程源码启用它。
+
 ## XeLaTeX + ctex
 
 已有 TeX Live / MacTeX，或必须套用既有 `.tex` 项目与期刊模板时用这条。
@@ -49,11 +65,62 @@ tectonic 会自动决定编译轮数（解决交叉引用），不必像 xelatex
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{graphicx, xcolor}
 \usepackage[most]{tcolorbox}                     % 说明框
-\usepackage{listings}                            % 代码
+\usepackage{minted}                              % 代码（需 Pygments + shell escape）
 \usepackage[colorlinks=true, linkcolor=blue]{hyperref}
 \usepackage{siunitx}                             % 单位与数值
 \usepackage[top=2.4cm, bottom=2.4cm, left=2.2cm, right=2.2cm]{geometry}
 ```
+
+## 代码排版：默认 minted
+
+`listings` 不依赖外部程序，但 Python 的关键字、类型、字符串和注释层次不够清楚；长代码
+尤其难读。教程默认使用 minted，让 Pygments 负责词法高亮：
+
+```latex
+\usepackage{xcolor}
+\usepackage{minted}
+\definecolor{codebg}{HTML}{F6F8FA}
+\usemintedstyle{friendly}
+\setminted{
+  fontsize=\small,
+  bgcolor=codebg,
+  breaklines=true,
+  breakanywhere=true,
+  linenos=true,
+  numbersep=7pt,
+  frame=lines,
+  framesep=2mm,
+  tabsize=4,
+  autogobble=true
+}
+\setminted[text]{linenos=false}  % 程序 stdout 不是源码，不编行号
+```
+
+源代码写成：
+
+```latex
+\begin{minted}{python}
+def contact_step(mass: float, velocity: float) -> float:
+    impulse = max(0.0, -mass * velocity)  # 地面只能推，不能拉
+    return impulse
+\end{minted}
+```
+
+真实程序输出写成 `minted{text}`。它会保留连续空格，适合逐字引用对齐表格：
+
+```latex
+\begin{minted}{text}
+normal impulse lambda_n   = 0.400000 N*s
+complementarity product   = 0.000e+00
+\end{minted}
+```
+
+长文件不要复制进正文，用 `\inputminted[firstline=40,lastline=65]{python}{examples/demo.py}`；
+这样正文与实际运行文件共用一份源码。中文注释可正常渲染，但图书式教程仍应优先让变量名和
+结构本身说话，注释保持短。程序输出关闭行号；需要逐行讲解的源代码才保留行号。
+
+如果来源不可信、构建环境禁止 shell escape，或者无法提供 Pygments，退回 `listings`。
+这是兼容方案，不要同时加载两个宏包并混用环境。
 
 Linux 上 `fontset=macnew` 不可用，换 `fontset=ubuntu` 或 `fandol`（跨平台、随 TeX Live 分发）。
 
@@ -96,11 +163,19 @@ set -euo pipefail
 cd "$(dirname "$0")"
 (cd figures && ./build_figs.sh)        # 先把 TikZ 图编成 pdf
 
+DOC_VENV="${DOC_VENV:-.venv-doc}"
+if [ ! -x "$DOC_VENV/bin/pygmentize" ]; then
+    python3 -m venv "$DOC_VENV"
+    "$DOC_VENV/bin/python" -m pip install pygments
+fi
+export PATH="$PWD/$DOC_VENV/bin:$PATH"
+
 if command -v tectonic >/dev/null; then
-    tectonic -X compile main.tex       # 自动决定编译轮数
+    tectonic -X compile main.tex --keep-logs \
+      -Z shell-escape-cwd="$PWD"       # minted；自动决定编译轮数
 else
-    xelatex -interaction=nonstopmode main.tex
-    xelatex -interaction=nonstopmode main.tex   # 第二遍解决交叉引用与目录
+    xelatex -shell-escape -interaction=nonstopmode main.tex
+    xelatex -shell-escape -interaction=nonstopmode main.tex
 fi
 ```
 

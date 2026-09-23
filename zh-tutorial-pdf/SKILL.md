@@ -91,17 +91,24 @@ description: 把技术材料（AI/ML 论文、英文教材、课程讲义、自�
 
 ## 1. 先闭环，再写一个字
 
-**动笔前必须先编译出一页测试 PDF**：一行中文 + 一个行间公式 + 一张插图 + 一个代码块。
+**动笔前必须先编译出一页测试 PDF**：一行中文 + 一个行间公式 + 一张插图 + 一个带
+语法高亮的代码块。
 跑通了后面才是纯写作；跑不通就先解决工具链，别攒了几千字才发现编不出来。
 
 | 情形 | 选择 |
 |---|---|
-| **默认首选** | **tectonic**。`brew install tectonic`，单二进制、**不需要 sudo**、宏包按需自动下载，完整 LaTeX 生态（TikZ / pgfplots / tcolorbox / algorithm2e / biblatex）都能用。实测 ctex + 中文 + TikZ 一次编译 3.3 秒 |
+| **默认首选** | **tectonic**。`brew install tectonic`，单二进制、**不需要 sudo**、宏包按需自动下载，完整 LaTeX 生态（TikZ / pgfplots / tcolorbox / algorithm2e / biblatex / minted）都能用。实测 ctex + 中文 + TikZ 一次编译 3.3 秒 |
 | 机器已有 TeX Live / MacTeX，或要套既有 `.tex` 模板 | 直接用 **XeLaTeX + ctex** |
 | 只想要极简依赖、不需要 LaTeX 宏包生态 | **Typst**，编译以毫秒计，语法现代 |
 
 三种都见 `references/latex.md`（tectonic / XeLaTeX）与 `references/typst.md`。
 **MacTeX / BasicTeX 是需要 sudo 的 pkg，agent 装不了 —— 不要在这上面反复尝试，直接上 tectonic。**
+
+代码排版默认用 **minted + Pygments**：源代码有语法高亮和行号，程序 stdout 用
+`minted{text}` 且关闭行号。minted 会调用外部高亮器，所以工具链测试必须同时确认
+`pygmentize` 可用，并给 tectonic 加 `-Z shell-escape-cwd="$(pwd)"`。完整的虚拟环境、
+导言区和 `build.sh` 写法见 `references/latex.md`。只有在文档来源不可信、不能启用
+shell escape，或外部高亮器确实不可用时才退回 `listings`。
 
 字体：中文正文 `Songti SC`、标题 `Heiti SC`、西文 `Libertinus Serif` / `New Computer Modern`、
 等宽 `Menlo`。macOS 自带，但**先确认**（`typst fonts` / `fc-list :lang=zh`），不要假设。
@@ -221,6 +228,7 @@ description: 把技术材料（AI/ML 论文、英文教材、课程讲义、自�
 - [ ] 答「C 完全不懂」的节点都有独立小节 + 具体数字，不是只包了个说明框
 - [ ] 三个诊断都看过：起点是否过高、有没有依赖边被证伪、是否整体过浅
 - [ ] `build.sh` 从干净状态一条命令出 PDF
+- [ ] 使用 minted 时，干净环境能找到 `pygmentize`，且 `build.sh` 已显式启用 shell escape
 - [ ] 论文源码/参考实现已下载并核对过确实是那一篇，正文中原文与代码对照着讲过
 - [ ] 贯穿全书的算例走通，每个数字由脚本生成
 - [ ] 文档引用的每行程序输出与真实 stdout 逐行比对过
