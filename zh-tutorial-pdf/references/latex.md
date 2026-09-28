@@ -68,7 +68,12 @@ PATH="$PWD/.venv-doc/bin:$PATH" \
 \usepackage{minted}                              % 代码（需 Pygments + shell escape）
 \usepackage[colorlinks=true, linkcolor=blue]{hyperref}
 \usepackage{siunitx}                             % 单位与数值
+\usepackage{booktabs, caption}                   % 脚本生成的表格：三线表 + \captionof
 \usepackage[top=2.4cm, bottom=2.4cm, left=2.2cm, right=2.2cm]{geometry}
+
+% macnew 的等宽中文是 STFangsong，授权禁止嵌入（fsType=0x0002），读者那边会整片消失。
+% 换成允许嵌入的字体。原因与检查方法见下文「等宽中文字体必须可嵌入」。
+\setCJKmonofont{Hiragino Sans GB}
 ```
 
 ## 代码排版：默认 minted
@@ -93,7 +98,7 @@ PATH="$PWD/.venv-doc/bin:$PATH" \
   tabsize=4,
   autogobble=true
 }
-\setminted[text]{linenos=false}  % 程序 stdout 不是源码，不编行号
+\setminted[text]{linenos=false}  % 只给必须逐字保留的报错、日志、命令用
 ```
 
 源代码写成：
@@ -106,18 +111,63 @@ def contact_step(mass: float, velocity: float) -> float:
 \end{minted}
 ```
 
-真实程序输出写成 `minted{text}`。它会保留连续空格，适合逐字引用对齐表格：
+## 程序输出：排成表格，不要贴 stdout
 
-```latex
-\begin{minted}{text}
-normal impulse lambda_n   = 0.400000 N*s
-complementarity product   = 0.000e+00
-\end{minted}
+把 stdout 原样贴进 `minted{text}` 看似最"诚实"，读者却读不懂：表头是变量名缩写，
+一排数字挤在一起，看不出每列是什么、在和谁比；对照组分成两个块，要来回翻着比。
+实测一本教程交付后，读者拿着截图说"完全看不懂在干嘛"。
+
+做法：算例脚本在构建时**直接生成表格源码**，正文 `\input`。用 `assets/tabular.py`
+（复制到项目的 `examples/` 下）：
+
+```python
+from tabular import Table, num, mat, txt
+
+t = Table("ex1_convergence", __file__, title="两种 eps 取法下的离散误差",
+          caption=r"在解析 $\tanh$ 廓线上算离散的 $\beta$，理论值为 $0$。"
+                  r"比值 $=$ 上一行误差 $\div$ 本行误差：二阶收敛时趋近 $4$。",
+          columns=[("N", "$N$"), ("max|beta|", r"$\max|\beta|$"), ("比值", "比值"),
+                   ("max|beta|", r"$\max|\beta|$"), ("比值", "比值")],
+          groups=[("", 1), (r"$\epsilon$ 固定", 2), (r"$\epsilon=2.5h$", 2)])
+t.row(num(64, "d"), num(0.3153466, ".6e"), None, num(0.3384232, ".6e"), None)
+...
+t.emit()   # 终端打印 + examples/out/tables/<id>.json + tables/<id>.tex
 ```
+
+一次产出三份，来自同一批格式化后的字符串，所以正文数字和运行结果不可能对不上：
+
+| 产物 | 给谁 |
+|---|---|
+| 终端里对齐的纯文本 | 跑脚本的人 |
+| `examples/out/tables/<id>.json` | 核对脚本、作图脚本（作图数据从这里读，不再手抄） |
+| `tables/<id>.tex` | 正文 `\input{tables/<id>}`，标签自动是 `tab:<id>` |
+
+生成的表格是非浮动的（`minipage` + `\captionof`），紧跟在引出它的那句话后面，
+标题在上、三线表、表注在下。排版细节由生成器统一处理：
+
+- 尾数的每一位原样保留，只改写法：`3.153466e-01` → $3.153466\times10^{-1}$
+- 恰好为零写 `0`（`+0.000e+00` 读成"+0.000"只会让人疑惑）
+- 同一列里混有 $\times10^{k}$ 时，指数为 0 的也写出 $\times10^{0}$，免得一列两种写法
+- 首列是数字就右对齐；矩阵单元格排成 `bmatrix`，行与行之间加空而不是整体拉大行距
+  （`arraystretch` 会连矩阵内部一起撑开）
+
+写标题时想清楚三件事：这张表**在比较什么**、**怎么读**、**哪一列能自查**。
+表头用正式记号和单位，不用变量名。
+
+仍然用 `minted{text}` 的场合只有一种：**文本本身就是要讲的对象**，必须逐字保留 ——
+报错信息（`Error: mass and inertia of moving bodies must be larger than mjMINVAL`）、
+日志行、命令。它们不是数据表。
+
+Typst 项目同理：读同一份 JSON，用 `#table(...)` 渲染即可。
 
 长文件不要复制进正文，用
 `\inputminted[autogobble=false,firstline=40,lastline=65]{python}{examples/demo.py}`；
-这样正文与实际运行文件共用一份源码。中文注释可正常渲染，但图书式教程仍应优先让变量名和
+这样正文与实际运行文件共用一份源码。
+
+**但行号不要手写。** 源码开头多一行 import，截取范围就整体下移，正文显示的变成另一段
+代码 —— 编译通过、PDF 照常生成。用 `assets/make_snippets.py` 按源码里已有的注释标记
+（如 `# 应力散度`）算出行号，写成 `tables/snip_<名字>.tex`，正文 `\input` 它；
+标记找不到或出现多次就构建失败。中文注释可正常渲染，但图书式教程仍应优先让变量名和
 结构本身说话，注释保持短。程序输出关闭行号；需要逐行讲解的源代码才保留行号。
 
 这里的 `autogobble=false` 不能省：实测 minted 2.6 在全局 `autogobble=true` 时，
@@ -129,6 +179,32 @@ autogobble；只有按行截取外部文件时显式关闭。
 这是兼容方案，不要同时加载两个宏包并混用环境。
 
 Linux 上 `fontset=macnew` 不可用，换 `fontset=ubuntu` 或 `fandol`（跨平台、随 TeX Live 分发）。
+
+## 等宽中文字体必须可嵌入
+
+PDF 里没嵌入的字体由**读者的机器**提供。你装了这个字体，打开一切正常；读者没装，
+那些字就是空白。编译过程不报任何错，你自己的渲染检查也全部通过。
+
+实测：ctex 的 `fontset=macnew` 在 `ctex-fontset-macnew.def` 里写着
+`\setCJKmonofont{STFangsong}`。STFangsong 的 OS/2 表 `fsType=0x0002`（授权禁止嵌入），
+xdvipdfmx 于是不嵌它，只在 PDF 里留下名字。结果代码注释、程序输出里的中文在读者那边
+整片消失 ——"终态界面形状（沿 x 取 8 个点）"只剩"x 8"。
+
+换字体前先查授权标志：
+
+```python
+from fontTools.ttLib import TTFont, TTCollection
+f = TTCollection(path).fonts[i] if path.endswith(".ttc") else TTFont(path)
+print(f["name"].getDebugName(6), hex(f["OS/2"].fsType))
+# 0x0002 禁止嵌入；0x0004 仅预览打印；0x0008 可编辑嵌入；0x0000 无限制
+```
+
+`.ttc` 里各个成员的标志可能不同（Songti.ttc 里 SC-Black 是 `0x0002`，SC-Light/Bold 是
+`0x0008`），要查你实际用到的那个。macOS 上 `Hiragino Sans GB`（冬青黑体，`0x0008`，
+在 `/System/Library/Fonts/`）适合做等宽中文。
+
+最后用 `assets/check_pdf_fonts.py main.pdf` 逐个检查 PDF 里的字体，
+有一个没嵌入就返回 1 —— 放进 `build.sh`，让构建失败。
 
 ## 八类说明框
 
@@ -167,7 +243,12 @@ build.sh          先编图，再编正文两遍（交叉引用）
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-(cd figures && ./build_figs.sh)        # 先把 TikZ 图编成 pdf
+for f in examples/ex*.py; do           # 跑算例：stdout 落盘，同时生成 tables/*.tex
+    python "$f" > "examples/out/$(basename "$f" .py).txt"
+done
+python make_snippets.py                # 代码片段行号按标记生成
+(cd figures && ./build_figs.sh)        # 再编图（数据从表格 JSON 读）
+python verify_numbers.py               # 表格可重建、正文数字可追溯，否则失败
 
 DOC_VENV="${DOC_VENV:-.venv-doc}"
 if [ ! -x "$DOC_VENV/bin/pygmentize" ]; then
@@ -183,7 +264,17 @@ else
     xelatex -shell-escape -interaction=nonstopmode main.tex
     xelatex -shell-escape -interaction=nonstopmode main.tex
 fi
+python check_pdf_fonts.py main.pdf     # 有字体没嵌入就失败
+if grep -E "Overfull \\\\hbox|undefined references" main.log; then
+    echo "日志里有溢出或未定义引用"; exit 1
+fi
 ```
+
+两个会让检查形同虚设的写法：
+
+- `build.sh` 里用 `|| true` 吞掉编译错误 —— 实测一个旧 `build.sh` 就这样把失败的编译报成了成功
+- 写成 `! grep ... main.log`：`set -e` **对用 `!` 取反的命令不生效**，找到溢出也照样往下跑。
+  必须写成上面的 `if ...; then exit 1; fi`（实测验证过）
 
 ## 保留原著编号
 

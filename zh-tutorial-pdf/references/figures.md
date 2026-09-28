@@ -86,6 +86,26 @@ UserWarning: Glyph 19981 (\N{CJK UNIFIED IDEOGRAPH-4E0D}) missing from font(s) D
 - 必须用中文时显式指定：`plt.rcParams["font.sans-serif"] = ["Songti SC"]`，
   并加 `plt.rcParams["axes.unicode_minus"] = False`（否则负号变方块）。
 
+**`unicode_minus=False` 管不到对数轴的刻度。** 默认的 `LogFormatter` 生成
+`$\mathdefault{10^{-3}}$`，而 `\mathdefault` 会切回**正文字体**（这里是 Songti SC），
+Songti 没有 U+2212（数学减号）字形，于是指数里的负号**静默**变成豆腐块，刻度读成
+`10⌷3`。控制台只有一行 `Font 'default' does not have a glyph for '\u2212'`，
+很容易被当成噪声过滤掉。修法是显式写刻度，让减号走 mathtext 字体：
+
+```python
+ax.set_yticks([1e-3, 1e-2, 1e-1])
+ax.set_yticklabels([r"$10^{-3}$", r"$10^{-2}$", r"$10^{-1}$"])
+ax.set_yticks([], minor=True)
+```
+
+查字体里有没有某个字形：`FT2Font(path).get_char_index(0x2212) != 0`。
+
+### 作图脚本里藏着第二份手抄
+
+算例的数字改了，图却没变 —— 因为作图脚本里还写着一份当初抄进去的数组。
+作图数据一律**从算例输出读**（表格 JSON，见 `latex.md`「程序输出：排成表格」），
+图里要写的文字数字（"比值 3.27 → 3.89"）也从数据拼出来，不要手写。
+
 ### contourf / 大量散点导出 SVG 体积爆炸
 
 41 层填充等高线导出 SVG 有 **4.3 MB**。把背景层光栅化，线条文字仍保持矢量：
